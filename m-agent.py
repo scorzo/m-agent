@@ -4,6 +4,7 @@ from datetime import datetime
 import time
 from openai import OpenAI
 from calendar_package import list_events, add_calendar_event, update_or_cancel_event
+from thread_store import store_thread, check_if_thread_exists
 
 # Read configuration file for API keys
 with open('config.json', 'r') as config_file:
@@ -13,6 +14,7 @@ with open('config.json', 'r') as config_file:
 
 client = OpenAI(api_key=openai_api_key)
 
+# llm callable generic chat function
 def get_chat_response(user_input, model="gpt-4-1106-preview"):
     try:
         completion = client.chat.completions.create(
@@ -28,7 +30,6 @@ def get_chat_response(user_input, model="gpt-4-1106-preview"):
     except Exception as e:
         # API request exceptions
         return f"An error occurred: {str(e)}"
-
 
 list_tools=[{"type":"function",
              "function":{
@@ -105,7 +106,62 @@ function_dispatch_table = {
     "get_chat_response" : get_chat_response
 }
 
-def run_loop(thread_id, run_id):
+
+
+# creates a thread - call this first
+def create_thread(user_input, lookup_id):
+
+    # Initialize or retrieve the thread ID (set to None if not existing)
+    # Check if there is already a thread_id for the wa_id
+    thread_id = check_if_thread_exists(lookup_id)
+
+    # If a thread doesn't exist, create one and store it
+    if thread_id is None:
+        print(f"Creating new thread with lookupId {lookup_id}")
+        thread = client.beta.threads.create()
+        store_thread(lookup_id, thread.id)
+        thread_id = thread.id
+
+    # Otherwise, retrieve the existing thread
+    else:
+        print(f"Retrieving existing thread with lookupId {lookup_id}")
+        thread = client.beta.threads.retrieve(thread_id)
+
+    # Add message to thread
+    message = client.beta.threads.messages.create(
+        thread_id = thread_id,
+        role="user",
+        content = user_input
+    )
+
+    return thread
+
+# creates an assistant - call this second
+def create_and_run_assistant(thread, assistant_id=None):
+
+    # Get current date in Los Angeles time zone
+    my_timezone = pytz.timezone(timezone_config)
+    my_time = datetime.now(my_timezone).strftime('%Y-%m-%d')
+
+    # Retrieve an existing assistant or create a new one
+    assistant = client.beta.assistants.retrieve(assistant_id) if assistant_id else client.beta.assistants.create(
+        name="ParallelFunction",
+        instructions=f"You are a helpful AI. You have the ability to schedule events in Google Calendar. Assume today's date is {my_time} and timezone is {my_timezone}.",
+        model="gpt-4-1106-preview",
+        tools=list_tools
+    )
+
+    # run assistant
+    run = client.beta.threads.runs.create(
+        thread_id = thread.id,
+        assistant_id = assistant.id
+    )
+
+    #print(run.model_dump_json(indent=4))
+    return run
+
+# gets assistant response - call this third
+def get_assistant_response(thread, run):
 
     while True:
         # wait 5 seconds
@@ -113,8 +169,8 @@ def run_loop(thread_id, run_id):
 
         # retrieve run status
         run_status = client.beta.threads.runs.retrieve(
-            thread_id = thread_id,
-            run_id = run_id
+            thread_id = thread.id,
+            run_id = run.id
         )
 
         # print(run.model_dump_json(indent=4))
@@ -122,7 +178,7 @@ def run_loop(thread_id, run_id):
         # if run is completed, get messages
         if run_status.status == "completed":
             messages = client.beta.threads.messages.list(
-                thread_id = thread_id
+                thread_id = thread.id
             )
 
             # Reverse the messages list to start from the latest message
@@ -186,8 +242,8 @@ def run_loop(thread_id, run_id):
 
             # submit the tool outputs to Assistants API
             client.beta.threads.runs.submit_tool_outputs(
-                thread_id = thread_id,
-                run_id = run_id,
+                thread_id = thread.id,
+                run_id = run.id,
                 tool_outputs = tools_output
             )
 
@@ -196,52 +252,17 @@ def run_loop(thread_id, run_id):
             time.sleep(5)
 
 
-def provide_user_specific_recommendations(user_input):
-    # Get current date in Los Angeles time zone
-    my_timezone = pytz.timezone(timezone_config)
-    my_time = datetime.now(my_timezone).strftime('%Y-%m-%d')
-
-    # step 1: create assistant
-    assistant = client.beta.assistants.create(
-        name="ParallelFunction",
-        instructions= f"You are a helpful AI.  You have the ability to schedule events in Google Calendar. Assume today's date is {my_time} and timezone is {my_timezone}.",
-        model="gpt-4-1106-preview",
-        tools=list_tools
-    )
-
-    # step 2: create thread
-    # Initialize or retrieve the thread ID (set to None if not existing)
-    thread_id = None  # Replace this with code to retrieve the existing thread ID, if available
-    thread_id = 'thread_1Mw6Ipvh74ak65qJWldCgdde'
-
-    # Check if there is an existing thread ID, create a new thread if not
-    if thread_id is None:
-        thread = client.beta.threads.create()
-        thread_id = thread.id  # Store this ID for future use
-
-
-    message = client.beta.threads.messages.create(
-        thread_id = thread_id,
-        role="user",
-        content = user_input
-    )
-
-    # step 3: run assistant
-    run = client.beta.threads.runs.create(
-        thread_id = thread_id,
-        assistant_id = assistant.id
-    )
-
-    #print(run.model_dump_json(indent=4))
-
-
-    run_loop(thread_id, run.id)
-
-
-
+# wrapper function - start here
+def say_something(user_input, thread_lookup_id, assistant_id = None):
+    thread = create_thread(user_input, thread_lookup_id)
+    run = create_and_run_assistant(thread)
+    get_assistant_response(thread, run)
 
 
 if __name__ == "__main__":
+
+    thread_lookup_id = 123
+
     while True:
         user_input = input("Please enter your request (or type 'exit'): ")
 
@@ -249,6 +270,6 @@ if __name__ == "__main__":
             print("Exiting the program.")
             break
 
-        output = provide_user_specific_recommendations(user_input)
+        output = say_something(user_input, thread_lookup_id)
         #print(output)
 
