@@ -1,4 +1,4 @@
-# README for Google Calendar Event Scheduling Script
+# README script for using OpenAI's Assistants API 
 
 ## Overview:
 This script uses OpenAI's Assistants API for function calling as well as managing threads and messages. It integrates with Google Calendar API to schedule events and employs GPT-4 to process natural language scheduling requests.
