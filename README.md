@@ -1,7 +1,7 @@
 # README for Google Calendar Event Scheduling Script
 
 ## Overview:
-This script integrates with Google Calendar using the Google Calendar API to schedule events. It utilizes OpenAI's GPT-3.5 for processing natural language inputs for scheduling requests.
+This script uses OpenAI's Assistants API for function calling as well as managing threads and messages. It integrates with Google Calendar API to schedule events and employs GPT-4 to process natural language scheduling requests.
 
 ## Setup and Usage
 
@@ -15,7 +15,7 @@ Install pytz timezone library:
     
     pip install pytz
 
-Install OpenAI GPT-3.5:
+Install OpenAI client libraries:
 
     pip install openai
 
