@@ -152,12 +152,6 @@ def create_or_retrieve_thread(user_input, lookup_id, client):
     else:
         thread = retrieve_existing_thread(thread_id, lookup_id, client)
 
-    if thread:
-        add_message_to_thread(thread.id, user_input, client)
-    else:
-        print("Error: Unable to create or retrieve thread.")
-        # Handle error as appropriate
-
     return thread
 
 def create_new_thread(lookup_id, client):
@@ -340,6 +334,8 @@ def process_user_request(user_input, thread_lookup_id, assistant_id=None, client
         thread = create_or_retrieve_thread(user_input, thread_lookup_id, client)
         if thread is None:
             raise Exception("Failed to create thread.")
+
+        add_message_to_thread(thread.id, user_input, client)
 
         run = create_and_run_assistant(thread, assistant_id, client, timezone_config)
         if run is None:
