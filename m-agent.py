@@ -183,24 +183,9 @@ def add_message_to_thread(thread_id, user_input, client):
         print(f"Failed to add message to thread: {e}")
 
 
-def create_and_run_assistant(thread, assistant_id=None, client=None, timezone_config=None):
-    """
-    Retrieves an existing assistant or creates a new one, and then runs it in the specified thread.
 
-    :param thread: The thread object where the assistant will be run.
-    :param assistant_id: The ID of an existing assistant (optional).
-    :param client: The client object for interacting with the API.
-    :param timezone_config: Timezone string (example: "America/Los_Angeles")
-    :return: The run object.
-    """
-    try:
-        assistant = retrieve_or_create_assistant(assistant_id, client, timezone_config)
-        return create_run_for_assistant(thread.id, assistant.id, client)
-    except Exception as e:
-        print(f"Error in create_and_run_assistant: {e}")
-        return None
 
-def retrieve_or_create_assistant(assistant_id, client, timezone_config):
+def retrieve_or_create_assistant(assistant_id, client, timezone_config=None):
     my_time, my_timezone = get_current_time_and_timezone(timezone_config)
     if assistant_id:
         return client.beta.assistants.retrieve(assistant_id)
@@ -224,7 +209,7 @@ def get_current_time_and_timezone(timezone_config):
     my_time = datetime.now(my_timezone).strftime('%Y-%m-%d')
     return my_time, my_timezone
 
-def create_run_for_assistant(thread_id, assistant_id, client):
+def create_run_for_assistant(assistant_id, thread_id, client):
     return client.beta.threads.runs.create(thread_id=thread_id, assistant_id=assistant_id)
 
 def get_assistant_response(thread, run, client):
@@ -324,24 +309,42 @@ def process_user_request(user_input, thread_lookup_id, assistant_id=None, client
     :return: The response from the assistant or None if an error occurs.
 
     This function encapsulates the full process of handling a user request:
-    1. Creating a thread (or retrieving an existing one) based on the 'thread_lookup_id'.
-    2. Running an assistant within the thread.
-    3. Retrieving the response from the assistant.
+    1. Create assistant
+    2. Creating a thread (or retrieving an existing one) based on the 'thread_lookup_id'.
+    3. Add message to thread
+    4. Create run from assistant and thread
+    5. Retrieving the response from the assistant.
 
     If any step in the process fails, the function captures the exception, logs the error, and returns None.
     """
     try:
+
+        # 1. Create assistant
+        try:
+            assistant = retrieve_or_create_assistant(assistant_id, client, timezone_config)
+        except Exception as e:
+            print(f"Error in retrieve_or_create_assistant: {e}")
+
+        # 2. Creating a thread (or retrieving an existing one) based on the 'thread_lookup_id'.
         thread = create_or_retrieve_thread(user_input, thread_lookup_id, client)
         if thread is None:
             raise Exception("Failed to create thread.")
 
+        # 3. Add message to thread
         add_message_to_thread(thread.id, user_input, client)
 
-        run = create_and_run_assistant(thread, assistant_id, client, timezone_config)
+        # 4. Create run from assistant and thread
+        try:
+            run = create_run_for_assistant(assistant.id, thread.id, client)
+        except Exception as e:
+            print(f"Error in create_run_for_assistant: {e}")
+
         if run is None:
             raise Exception("Failed to create and run assistant.")
 
+        # 5. Retrieving the response from the assistant.
         return get_assistant_response(thread, run, client)
+
     except Exception as e:
         print(f"Error in process_user_request: {e}")
         return None
