@@ -57,72 +57,72 @@ def get_chat_response(user_input, model="gpt-4-1106-preview"):
         # API request exceptions
         return f"An error occurred: {str(e)}"
 
-list_tools=[{"type":"function",
-             "function":{
-                 "name": "add_calendar_event",
-                 "description": "Add an event to Google Calendar",
-                 "parameters": {
-                     "type": "object",
-                     "properties": {
-                         "event_summary": {"type": "string"},
-                         "event_location": {"type": "string"},
-                         "event_description": {"type": "string"},
-                         "start_time": {"type": "string"},
-                         "end_time": {"type": "string"},
-                         "start_time_zone": {"type": "string"},
-                         "end_time_zone": {"type": "string"},
-                     },
-                     "required": ["event_summary", "event_location", "event_description", "start_time", "end_time", "start_time_zone", "end_time_zone"],
-                 }
-             }
-             },
-            {"type":"function",
-             "function": {
-                 "name": "list_events",
-                 "description": "List past and upcoming events from Google Calendar",
-                 "parameters": {
-                     "type": "object",
-                     "properties": {
-                         "calendar_id": {"type": "string"},
-                         "max_results": {"type": "integer"},
-                         "start_time": {"type": "string", "format": "date-time", "description": "Start time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"},
-                         "end_time": {"type": "string", "format": "date-time", "description": "End time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"},
-                         "timezone": {"type": "string", "description": "Timezone in which the start and end times are specified"}
-                     },
-                     "required": ["calendar_id", "max_results"],
-                     "additionalProperties": True
-                 }
-             }
-             },
-            {"type":"function",
-             "function":{
-                 "name": "update_or_cancel_event",
-                 "description": "Update or cancel an event in Google Calendar",
-                 "parameters": {
-                     "type": "object",
-                     "properties": {
-                         "calendar_id": {"type": "string"},
-                         "event_id": {"type": "string"},
-                         "update_body": {"type": "object"}
-                     },
-                     "required": ["calendar_id", "event_id"]
-                 }
-             }
-             },
-            {"type":"function",
-             "function":{
-                 "name": "get_chat_response",
-                 "description": "Provide chat responses to user queries",
-                 "parameters": {
-                     "type": "object",
-                     "properties": {
-                         "user_input": {"type": "string", "description": "User's query"},
-                         "model": {"type": "string", "description": "GPT model to use"},
-                     },
-                     "required": ["user_input"]
-                 }
-             }
-             }]
+user_proxy_list_tools=[{"type":"function",
+                        "function":{
+                            "name": "add_calendar_event",
+                            "description": "Add an event to Google Calendar",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "event_summary": {"type": "string"},
+                                    "event_location": {"type": "string"},
+                                    "event_description": {"type": "string"},
+                                    "start_time": {"type": "string"},
+                                    "end_time": {"type": "string"},
+                                    "start_time_zone": {"type": "string"},
+                                    "end_time_zone": {"type": "string"},
+                                },
+                                "required": ["event_summary", "event_location", "event_description", "start_time", "end_time", "start_time_zone", "end_time_zone"],
+                            }
+                        }
+                        },
+                       {"type":"function",
+                        "function": {
+                            "name": "list_events",
+                            "description": "List past and upcoming events from Google Calendar",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "calendar_id": {"type": "string"},
+                                    "max_results": {"type": "integer"},
+                                    "start_time": {"type": "string", "format": "date-time", "description": "Start time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"},
+                                    "end_time": {"type": "string", "format": "date-time", "description": "End time in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"},
+                                    "timezone": {"type": "string", "description": "Timezone in which the start and end times are specified"}
+                                },
+                                "required": ["calendar_id", "max_results"],
+                                "additionalProperties": True
+                            }
+                        }
+                        },
+                       {"type":"function",
+                        "function":{
+                            "name": "update_or_cancel_event",
+                            "description": "Update or cancel an event in Google Calendar",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "calendar_id": {"type": "string"},
+                                    "event_id": {"type": "string"},
+                                    "update_body": {"type": "object"}
+                                },
+                                "required": ["calendar_id", "event_id"]
+                            }
+                        }
+                        },
+                       {"type":"function",
+                        "function":{
+                            "name": "get_chat_response",
+                            "description": "Provide chat responses to user queries",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "user_input": {"type": "string", "description": "User's query"},
+                                    "model": {"type": "string", "description": "GPT model to use"},
+                                },
+                                "required": ["user_input"]
+                            }
+                        }
+                        }]
 
 # define dispatch table
 function_dispatch_table = {
@@ -185,7 +185,7 @@ def add_message_to_thread(thread_id, user_input, client):
 
 
 
-def retrieve_or_create_assistant(assistant_id, client, timezone_config=None):
+def retrieve_or_create_assistant(assistant_id, client, timezone_config=None, list_tools=[]):
     my_time, my_timezone = get_current_time_and_timezone(timezone_config)
     if assistant_id:
         return client.beta.assistants.retrieve(assistant_id)
@@ -298,7 +298,7 @@ def submit_tool_outputs(thread, run, tools_output, client):
             tool_outputs=tools_output
         )
 
-def process_user_request(user_input, thread_lookup_id, assistant_id=None, client=None, timezone_config=None):
+def process_user_request(client=None, user_input, assistant_id=None, list_tools=[], thread_lookup_id, timezone_config=None):
     """
     Processes a user's request by creating a thread, running an assistant, and then retrieving the assistant's response.
 
@@ -321,7 +321,7 @@ def process_user_request(user_input, thread_lookup_id, assistant_id=None, client
 
         # 1. Create assistant
         try:
-            assistant = retrieve_or_create_assistant(assistant_id, client, timezone_config)
+            assistant = retrieve_or_create_assistant(assistant_id, client, timezone_config, list_tools)
         except Exception as e:
             print(f"Error in retrieve_or_create_assistant: {e}")
 
@@ -353,6 +353,7 @@ def process_user_request(user_input, thread_lookup_id, assistant_id=None, client
 def main():
     thread_lookup_id = 111
     assistant_id = None  # Replace with a valid assistant_id if needed
+    list_tools = user_proxy_list_tools
 
     while True:
         user_input = get_user_input()
@@ -360,7 +361,7 @@ def main():
         if user_input == 'exit':
             exit_program()
 
-        process_user_request(user_input, thread_lookup_id, assistant_id, client, timezone_config)
+        process_user_request(client, user_input, assistant_id, list_tools, thread_lookup_id, timezone_config)
 
 
 def get_user_input():
